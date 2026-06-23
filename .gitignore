@@ -1,0 +1,7 @@
+node_modules/
+# Perfil de Chrome: cookies y sesión, nunca subir
+chrome-profile/
+# Datos scrapeados y transcripciones por proyecto
+projects/
+*.m4a
+*.mp4
