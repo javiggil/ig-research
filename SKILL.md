@@ -114,4 +114,5 @@ Todo el branding es de **javiggil**. Ya está en `report-html.js`:
 - ✅ HECHO: extracción de engagement y autor desde `ld+json`/`og:` (exacta), con fallback heurístico de `<span>`.
 - ✅ HECHO: captura de diapositivas de carruseles (`<id>_slideN.jpg`), recorriendo con el botón "Next".
 - ✅ HECHO: multiplicador de outlier (`post.multiplier` = likes / `post.followers`), mostrado como badge por post y como métrica "Top multiplicador" en el resumen.
+- ✅ HECHO (2026-07-02): descarga de audio con `--cookies-from-browser "chrome:$SKILL/chrome-profile"` (Instagram exige sesión para el media; sin cookies todo eran `x`). Descifrar el Keychain añade ~2-5s por reel; timeout subido a 90s. Requiere el mismo Chrome/perfil logueado que el scrape.
 - Reintento de perfiles "0 posts" mejorable (carga lenta tras varios hashtags). **← siguiente mejora**

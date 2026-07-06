@@ -156,23 +156,37 @@ async function collectProfilePosts(client, profileUrl, maxPosts) {
       for (const l of links) {
         const h = l.getAttribute('href');
         if (!seen.has(h)) { seen.add(h); hrefs.push(h); }
-        if (hrefs.length >= ${maxPosts}) break;
       }
       return hrefs;
     })()
   `;
 
-  // Poll until the post grid actually renders (profiles load late, especially
-  // after several prior scrapes). This is the fix for the "Found 0 posts" bug.
-  let hrefs = [];
-  for (let attempt = 0; attempt < 14; attempt++) {
+  // Instagram virtualizes the profile grid (rows leave the DOM on scroll), so
+  // ACCUMULATE hrefs across scroll rounds instead of reading the DOM once.
+  // Keeps the render-poll behavior that fixed the "Found 0 posts" bug, then
+  // scrolls until maxPosts are collected or the profile runs dry.
+  const collected = [];
+  const seen = new Set();
+  let stale = 0;
+  for (let attempt = 0; attempt < 120; attempt++) {
     const r = await client.Runtime.evaluate({ expression: grab, returnByValue: true });
-    hrefs = r.result.value || [];
-    if (hrefs.length >= Math.min(maxPosts, 6)) break;
-    await client.Runtime.evaluate({ expression: 'window.scrollBy(0, 600)' });
+    const before = collected.length;
+    for (const h of r.result.value || []) {
+      if (!seen.has(h)) { seen.add(h); collected.push(h); }
+    }
+    if (collected.length >= maxPosts) break;
+    if (collected.length === 0) {
+      if (attempt >= 14) break; // grid never rendered (old cap)
+    } else if (collected.length === before) {
+      stale++;
+      if (stale >= 8) break; // end of profile
+    } else {
+      stale = 0;
+    }
+    await client.Runtime.evaluate({ expression: 'window.scrollBy(0, 1200)' });
     await wait(1500);
   }
-  return hrefs;
+  return collected.slice(0, maxPosts);
 }
 
 // Walk a carousel (or single image) slide by slide, screenshotting each frame.
@@ -210,8 +224,19 @@ async function captureCarousel(client, postId) {
     const adv = await client.Runtime.evaluate({
       expression: `
         (() => {
-          const b = document.querySelector('button[aria-label="Next"]')
-            || [...document.querySelectorAll('button,[role="button"]')].find(x => (x.getAttribute('aria-label') || '') === 'Next');
+          // Next control is localized (en "Next", es "Siguiente", pt "Avancar", ...).
+          // Match aria-label across locales; fall back to a right-edge chevron button.
+          const labels = /^(next|siguiente|pr[oó]xim[oa]|avan[cç]ar|avanti|suivant|weiter|seuraava|volgende|n+a+stepn[ai])$/i;
+          let b = [...document.querySelectorAll('button,[role="button"],[aria-label]')]
+            .find(x => labels.test(((x.getAttribute('aria-label') || '').trim())));
+          if (!b) {
+            const cands = [...document.querySelectorAll('button,[role="button"]')].filter(x => {
+              const r = x.getBoundingClientRect();
+              return r.width > 0 && r.height > 0 && r.left > window.innerWidth * 0.55
+                && r.top < window.innerHeight * 0.85 && (r.top + r.height / 2) > window.innerHeight * 0.2;
+            });
+            b = cands.find(x => x.querySelector('svg')) || null;
+          }
           if (b) { b.click(); return true; }
           return false;
         })()
@@ -576,7 +601,7 @@ function parseEngagement(post) {
 
     // Audio phase: download audio ONLY for the top N reels by engagement, then
     // transcribe.sh will transcribe just those. This is the big time saver.
-    const TOP_AUDIO_N = config.topAudio || 15;
+    const TOP_AUDIO_N = config.topAudio ?? 15; // 0 = sin audio (selección manual posterior)
     const topReels = unique.filter(p => p.type === 'reel').slice(0, TOP_AUDIO_N);
     console.log(`\n  Downloading audio for top ${topReels.length} reels (of ${unique.filter(p => p.type === 'reel').length})...`);
     for (const post of topReels) {
@@ -584,9 +609,12 @@ function parseEngagement(post) {
       if (existsSync(audioFile)) { post.hasAudio = true; process.stdout.write('·'); continue; }
       const postUrl = post.url || (String(post.href).startsWith('http') ? post.href : 'https://www.instagram.com' + post.href);
       try {
+        // Instagram exige sesión para el media desde 2026: usamos las cookies del chrome-profile
+        // de la skill (fix 2026-07-02; sin esto todo son 'x'). La descifra el Keychain, tarda ~2-5s extra.
+        const chromeProfile = join(homedir(), '.claude', 'skills', 'ig-research', 'chrome-profile');
         execSync(
-          `python3 -m yt_dlp --format worstaudio --no-warnings --quiet -o "${audioFile}" "${postUrl}"`,
-          { timeout: 45000, stdio: 'pipe' }
+          `python3 -m yt_dlp --format worstaudio --no-warnings --quiet --cookies-from-browser "chrome:${chromeProfile}" -o "${audioFile}" "${postUrl}"`,
+          { timeout: 90000, stdio: 'pipe' }
         );
         post.hasAudio = existsSync(audioFile);
         process.stdout.write(post.hasAudio ? 'a' : 'x');
