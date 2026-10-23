@@ -14,7 +14,7 @@ Herramienta para investigar el contenido que mejor rinde en Instagram y destilar
 Todo está centralizado **dentro de la propia skill**: **`~/.claude/skills/ig-research/`** (la raíz de la skill, en adelante `$SKILL`). Estructura: `scripts/`, `node_modules/`, `package.json`, `projects/` (los análisis) y `chrome-profile/` (la sesión de Instagram).
 
 - `scripts/scrape.js` — controla Chrome vía CDP, recorre hashtags y/o perfiles, extrae engagement + caption, captura 3 screenshots del hook de cada reel, guarda incrementalmente, rankea por alcance y descarga audio **solo del top 15 reels**.
-- `scripts/transcribe.sh` — transcribe con Whisper (modelo tiny, **autodetección de idioma**) los audios descargados.
+- `scripts/transcribe.sh` — transcribe con whisper.cpp (`whisper-cli` y el modelo ggml small de `~/.cache/hyperframes/whisper/models/`, **autodetección de idioma**) los audios descargados. Desde el 2026-10-10: el Whisper de Python se rompe con NumPy 2 y fallaba en silencio. Si algún audio falla, el script lo dice y sale con error.
 - `scripts/report-html.js` — genera `report.html` con el **diseño de marca javiggil** (paleta, fuentes, enlaces al post original). Muestra el **top 10**.
 - `scripts/report.js` — variante en markdown (opcional).
 - `projects/<slug>/` — cada análisis: `config.json`, `raw-posts.json`, `transcripts/`, `hook-screenshots/`, `report-analysis.json`, `report.html`.
@@ -110,9 +110,6 @@ Todo el branding es de **javiggil**. Ya está en `report-html.js`:
 - Cabecera y pie enlazan a `instagram.com/javiggil`.
 - Nunca volver a Inter ni al dorado del tema original. Nunca side-stripes (`border-left` de color), gradient text ni em dashes en el copy.
 
-## Limitaciones conocidas / mejoras pendientes
-- ✅ HECHO: extracción de engagement y autor desde `ld+json`/`og:` (exacta), con fallback heurístico de `<span>`.
-- ✅ HECHO: captura de diapositivas de carruseles (`<id>_slideN.jpg`), recorriendo con el botón "Next".
-- ✅ HECHO: multiplicador de outlier (`post.multiplier` = likes / `post.followers`), mostrado como badge por post y como métrica "Top multiplicador" en el resumen.
-- ✅ HECHO (2026-07-02): descarga de audio con `--cookies-from-browser "chrome:$SKILL/chrome-profile"` (Instagram exige sesión para el media; sin cookies todo eran `x`). Descifrar el Keychain añade ~2-5s por reel; timeout subido a 90s. Requiere el mismo Chrome/perfil logueado que el scrape.
-- Reintento de perfiles "0 posts" mejorable (carga lenta tras varios hashtags). **← siguiente mejora**
+## Limitaciones conocidas
+- Algunos perfiles salen con "0 posts" si Instagram carga lento después de varios hashtags: vuelve a lanzar solo esos perfiles.
+- Instagram exige sesión para descargar el audio: el scrape y la descarga usan el mismo Chrome logueado (`chrome-profile/`, que nunca se sube a ningún sitio).

@@ -23,7 +23,6 @@ COOKIES="chrome:$SKILL/chrome-profile"
 TDIR="$DIR/transcripts"; mkdir -p "$TDIR"
 FDIR="$DIR/frames"; mkdir -p "$FDIR"
 TMPV="$DIR/.video-tmp"; mkdir -p "$TMPV"
-WMODEL="${WHISPER_MODEL:-tiny}"
 
 # IDs: o bien --from-list id1,id2,... o bien Top-N reels por likes desde raw-posts.json
 if [ "${2:-}" = "--from-list" ]; then
@@ -66,14 +65,14 @@ for id in $IDS; do
   if [ "$hasTxt" = 0 ]; then
     ffmpeg -hide_banner -loglevel error -i "$vid" -vn -acodec copy "$TDIR/$id.m4a" 2>/dev/null \
       || ffmpeg -hide_banner -loglevel error -i "$vid" -vn -c:a aac "$TDIR/$id.m4a" 2>/dev/null
-    python3 -m whisper "$TDIR/$id.m4a" --model "$WMODEL" --output_format txt --output_dir "$TDIR" >/dev/null 2>&1
   fi
   fcnt=$(ls "$FDIR/$id"/frame_*.jpg 2>/dev/null | wc -l | tr -d ' ')
-  tok=0; [ -f "$TDIR/$id.txt" ] && tok=1
   rm -f "$vid"
-  echo "     ✓ frames=$fcnt txt=$tok"
+  echo "     ✓ frames=$fcnt"
   ok=$((ok+1))
   sleep 3
 done
 rmdir "$TMPV" 2>/dev/null
+# Transcripción de todos los audios nuevos con whisper.cpp (el Whisper de Python se rompe con NumPy 2)
+bash "$SKILL/scripts/transcribe.sh" "$PROJ"
 echo "Ingesta completa: $ok/$total en $DIR"
