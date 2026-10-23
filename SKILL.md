@@ -14,7 +14,9 @@ Herramienta para investigar el contenido que mejor rinde en Instagram y destilar
 Todo está centralizado **dentro de la propia skill**: **`~/.claude/skills/ig-research/`** (la raíz de la skill, en adelante `$SKILL`). Estructura: `scripts/`, `node_modules/`, `package.json`, `projects/` (los análisis) y `chrome-profile/` (la sesión de Instagram).
 
 - `scripts/scrape.js` — controla Chrome vía CDP, recorre hashtags y/o perfiles, extrae engagement + caption, captura 3 screenshots del hook de cada reel, guarda incrementalmente, rankea por alcance y descarga audio **solo del top 15 reels**.
-- `scripts/transcribe.sh` — transcribe con whisper.cpp (`whisper-cli` y el modelo ggml small de `~/.cache/hyperframes/whisper/models/`, **autodetección de idioma**) los audios descargados. Desde el 2026-10-10: el Whisper de Python se rompe con NumPy 2 y fallaba en silencio. Si algún audio falla, el script lo dice y sale con error.
+- `scripts/transcribe.js` — transcribe con whisper.cpp (`whisper-cli`; el modelo ggml lo busca en `~/.cache/whisper-cpp` y, si no hay, lo descarga la primera vez; **autodetección de idioma**) los audios descargados. Si algún audio falla, lo dice y sale con error.
+- `scripts/comun.js` — lo compartido: saca la sesión de Instagram del Chrome abierto (CDP) para yt-dlp, y localiza ffmpeg, yt-dlp y whisper-cli. Funciona igual en **Mac, Windows y Linux**.
+- `scripts/ingest.js` y `scripts/frames.js` — disección de reels enteros (vídeo, fotogramas y transcripción). Necesitan el Chrome abierto con la sesión.
 - `scripts/report-html.js` — genera `report.html` con el **diseño de marca javiggil** (paleta, fuentes, enlaces al post original). Muestra el **top 10**.
 - `scripts/report.js` — variante en markdown (opcional).
 - `projects/<slug>/` — cada análisis: `config.json`, `raw-posts.json`, `transcripts/`, `hook-screenshots/`, `report-analysis.json`, `report.html`.
@@ -39,7 +41,12 @@ curl -s http://localhost:9222/json/version
 ```
 Si está caído, **pide al usuario** que lo relance (no intentes lanzarlo tú) con:
 ```
+# Mac
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir="$HOME/.claude/skills/ig-research/chrome-profile"
+```
+```
+# Windows (PowerShell)
+& "$env:ProgramFiles\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="$env:USERPROFILE\.claude\skills\ig-research\chrome-profile"
 ```
 y que abra **instagram.com logueado** en esa ventana. Confirma también que hay una pestaña de instagram abierta (`curl -s localhost:9222/json`).
 
@@ -69,7 +76,7 @@ Lánzalo en segundo plano. Avisa al usuario: **mantén la pestaña de Instagram 
 
 ### 4. Transcribir
 ```
-bash scripts/transcribe.sh <proyecto>
+node scripts/transcribe.js <proyecto>
 ```
 Ya solo existen los audios del top 15, así que es rápido.
 
@@ -112,4 +119,4 @@ Todo el branding es de **javiggil**. Ya está en `report-html.js`:
 
 ## Limitaciones conocidas
 - Algunos perfiles salen con "0 posts" si Instagram carga lento después de varios hashtags: vuelve a lanzar solo esos perfiles.
-- Instagram exige sesión para descargar el audio: el scrape y la descarga usan el mismo Chrome logueado (`chrome-profile/`, que nunca se sube a ningún sitio).
+- Instagram exige sesión para descargar el audio y los vídeos: se saca del Chrome abierto y se le pasa a yt-dlp en un fichero temporal (`.cookies.txt` dentro del proyecto) que se borra al acabar. El perfil (`chrome-profile/`) nunca se sube a ningún sitio.

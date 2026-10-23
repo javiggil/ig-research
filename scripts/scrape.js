@@ -7,9 +7,9 @@
 // =============================================================================
 
 import CDP from 'chrome-remote-interface';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
-import { execSync } from 'child_process';
+import { exportarCookies, ytdlp } from './comun.js';
 import { homedir } from 'os';
 
 const projectName = process.argv[2];
@@ -600,29 +600,23 @@ function parseEngagement(post) {
     }
 
     // Audio phase: download audio ONLY for the top N reels by engagement, then
-    // transcribe.sh will transcribe just those. This is the big time saver.
+    // transcribe.js will transcribe just those. This is the big time saver.
     const TOP_AUDIO_N = config.topAudio ?? 15; // 0 = sin audio (selección manual posterior)
     const topReels = unique.filter(p => p.type === 'reel').slice(0, TOP_AUDIO_N);
     console.log(`\n  Downloading audio for top ${topReels.length} reels (of ${unique.filter(p => p.type === 'reel').length})...`);
+    // Instagram exige sesión para bajar el media: las cookies salen del propio Chrome abierto (CDP) y se
+    // le pasan a yt-dlp en un fichero que se borra al acabar. Vale igual en Mac y en Windows.
+    const cookiesFile = join(projectDir, '.cookies.txt');
+    if (topReels.length) await exportarCookies(null, cookiesFile, client);
     for (const post of topReels) {
       const audioFile = join(transcriptsDir, `${post.postId}.m4a`);
       if (existsSync(audioFile)) { post.hasAudio = true; process.stdout.write('·'); continue; }
       const postUrl = post.url || (String(post.href).startsWith('http') ? post.href : 'https://www.instagram.com' + post.href);
-      try {
-        // Instagram exige sesión para el media desde 2026: usamos las cookies del chrome-profile
-        // de la skill (fix 2026-07-02; sin esto todo son 'x'). La descifra el Keychain, tarda ~2-5s extra.
-        const chromeProfile = join(homedir(), '.claude', 'skills', 'ig-research', 'chrome-profile');
-        execSync(
-          `python3 -m yt_dlp --format worstaudio --no-warnings --quiet --cookies-from-browser "chrome:${chromeProfile}" -o "${audioFile}" "${postUrl}"`,
-          { timeout: 90000, stdio: 'pipe' }
-        );
-        post.hasAudio = existsSync(audioFile);
-        process.stdout.write(post.hasAudio ? 'a' : 'x');
-      } catch (e) {
-        post.hasAudio = false;
-        process.stdout.write('x');
-      }
+      ytdlp(['--format', 'worstaudio', '--no-warnings', '--quiet', '--cookies', cookiesFile, '-o', audioFile, postUrl], 90000);
+      post.hasAudio = existsSync(audioFile);
+      process.stdout.write(post.hasAudio ? 'a' : 'x');
     }
+    rmSync(cookiesFile, { force: true });
     console.log('');
 
     const output = {

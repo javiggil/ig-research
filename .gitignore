@@ -5,3 +5,6 @@ chrome-profile/
 projects/
 *.m4a
 *.mp4
+# La sesión exportada para yt-dlp y los vídeos de paso: nunca a git
+.cookies.txt
+.video-tmp/

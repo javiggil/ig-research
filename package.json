@@ -2,10 +2,13 @@
   "name": "ig-research",
   "version": "1.0.0",
   "type": "module",
+  "engines": { "node": ">=20.11" },
   "description": "Instagram niche research tool - scrape, transcribe, analyze top-performing content in any niche",
   "scripts": {
     "scrape": "node scripts/scrape.js",
-    "transcribe": "bash scripts/transcribe.sh",
+    "transcribe": "node scripts/transcribe.js",
+    "ingest": "node scripts/ingest.js",
+    "frames": "node scripts/frames.js",
     "report": "node scripts/report-html.js",
     "report-md": "node scripts/report.js"
   },
